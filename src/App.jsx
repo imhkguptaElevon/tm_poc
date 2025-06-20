@@ -8,6 +8,7 @@ import * as mobilenetModule from '@tensorflow-models/mobilenet';
 import * as knnClassifier from '@tensorflow-models/knn-classifier';
 import * as tf from '@tensorflow/tfjs';
 import { Button, Dialog, DialogContent, DialogActions, Typography } from '@mui/material';
+import { saveAs } from 'file-saver';
 
 function App() {
   const [classes, setClasses] = useState(['Class 1', 'Class 2']);
@@ -22,6 +23,7 @@ function App() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [previewResult, setPreviewResult] = useState(null);
+  const [importDialog, setImportDialog] = useState(false);
 
   // Load MobileNet and KNN Classifier on mount
   useEffect(() => {
@@ -85,9 +87,42 @@ function App() {
     setPreviewResult(result);
   };
 
-  // Export handler (stubbed)
-  const handleExport = () => {
-    alert('Export not implemented in POC yet.');
+  // Export handler
+  const handleExport = async () => {
+    if (!classifier) return;
+    const dataset = classifier.getClassifierDataset();
+    const datasetObj = {};
+    Object.keys(dataset).forEach(key => {
+      datasetObj[key] = dataset[key].dataSync();
+    });
+    const exportObj = {
+      dataset: datasetObj,
+      classLabels: classes,
+    };
+    const blob = new Blob([JSON.stringify(exportObj)], { type: 'application/json' });
+    saveAs(blob, 'tm-knn-model.json');
+  };
+
+  // Import handler
+  const handleImport = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const obj = JSON.parse(ev.target.result);
+      if (!obj.dataset || !obj.classLabels) return;
+      // Recreate tensors
+      const newDataset = {};
+      Object.keys(obj.dataset).forEach(key => {
+        newDataset[key] = tf.tensor(obj.dataset[key], [obj.dataset[key].length / 1024, 1024]);
+      });
+      classifier.setClassifierDataset(newDataset);
+      setClasses(obj.classLabels);
+      setImages(obj.classLabels.map(() => []));
+      setCanExport(true);
+    };
+    reader.readAsText(file);
+    setImportDialog(false);
   };
 
   const handleWebcamCapture = img => {
@@ -95,7 +130,7 @@ function App() {
   };
 
   return (
-    <Box sx={{ bgcolor: '#f5f6fa', minHeight: '100vh', py: 4 }}>
+    <Box sx={{ bgcolor: '#f5f6fa', minHeight: '100vh', width: '100vw', py: 4, padding: 0 }}>
       <Container maxWidth="lg">
         <Grid container spacing={4}>
           <Grid item xs={12} md={6}>
@@ -119,6 +154,7 @@ function App() {
             <PreviewPanel
               canExport={canExport}
               onExport={handleExport}
+              onImport={() => setImportDialog(true)}
               classes={classes}
               classifier={classifier}
               mobilenet={mobilenet}
@@ -132,6 +168,18 @@ function App() {
         onClose={() => setWebcamOpen(false)}
         onCapture={handleWebcamCapture}
       />
+      <Dialog open={importDialog} onClose={() => setImportDialog(false)}>
+        <DialogContent>
+          <Typography variant="h6">Import Model</Typography>
+          <Button variant="outlined" component="label" sx={{ mt: 2 }}>
+            Select File
+            <input type="file" accept="application/json" hidden onChange={handleImport} />
+          </Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialog(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

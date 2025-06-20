@@ -6,6 +6,7 @@ import {
 export default function PreviewPanel({
   canExport,
   onExport,
+  onImport,
   classes: classLabels = [],
   classifier,
   mobilenet,
@@ -109,6 +110,14 @@ export default function PreviewPanel({
             onClick={onExport}
           >
             Export Model
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<span role="img" aria-label="import">⏬</span>}
+            disabled={loading}
+            onClick={onImport}
+          >
+            Import Model
           </Button>
         </Stack>
         {inputSource === 'webcam' && previewOn && (
